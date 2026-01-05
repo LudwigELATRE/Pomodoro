@@ -1,0 +1,20 @@
+
+services:
+###> doctrine/doctrine-bundle ###
+  database:
+    image: mariadb:11.2
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-pomodoro}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-elydris}
+      MYSQL_USER: ${MYSQL_USER:-pomodoro}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+    ports:
+      - "3306:3306"
+    volumes:
+      - database_data:/var/lib/mysql:rw
+###< doctrine/doctrine-bundle ###
+
+volumes:
+###> doctrine/doctrine-bundle ###
+  database_data:
+###< doctrine/doctrine-bundle ###
