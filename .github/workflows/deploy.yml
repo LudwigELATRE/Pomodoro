@@ -39,7 +39,9 @@ jobs:
           restore-keys: ${{ runner.os }}-composer-
 
       - name: Install Composer dependencies
-        run: composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
+        run: |
+          export APP_ENV=prod
+          composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
 
       - name: Install npm dependencies
         run: npm ci
