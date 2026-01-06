@@ -108,6 +108,9 @@ GET    /api/statistics              # Statistiques utilisateur
 ## Déploiement
 
 ```bash
+# 🚀 NOUVEAU : Générer automatiquement tous les secrets
+make setup-deployment
+
 # Vérifier avant déploiement
 make deploy-check
 
@@ -116,7 +119,12 @@ npm run build
 composer install --no-dev --optimize-autoloader
 ```
 
-Voir [DEPLOYMENT.md](DEPLOYMENT.md) pour le déploiement sur O2switch.
+**`make setup-deployment`** génère automatiquement :
+- APP_SECRET
+- JWT_PASSPHRASE et clés JWT
+- Fichier `deployment-secrets.txt` prêt pour GitHub Secrets
+
+Voir [DEPLOYMENT.md](DEPLOYMENT.md) pour le déploiement complet sur O2switch.
 
 ## Troubleshooting Rapide
 

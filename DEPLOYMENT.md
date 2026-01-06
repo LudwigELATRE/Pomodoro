@@ -43,7 +43,32 @@ cd ~/www  # ou public_html selon votre configuration
 mkdir -p pomodoro/{var/cache,var/log,config/jwt}
 ```
 
-### 4. Générer les clés JWT sur le serveur
+### 4. Générer les clés JWT et secrets (AUTOMATISÉ !)
+
+**Nouveau : Script automatique disponible !**
+
+Au lieu de générer manuellement les clés JWT sur le serveur, utilisez le script automatisé qui génère TOUT :
+
+```bash
+# Une seule commande pour tout générer !
+make setup-deployment
+
+# Ou directement :
+bash scripts/setup-deployment.sh
+```
+
+Ce script génère automatiquement :
+- ✅ APP_SECRET
+- ✅ JWT_PASSPHRASE
+- ✅ JWT_PRIVATE_KEY et JWT_PUBLIC_KEY
+- ✅ Clés copiées dans config/jwt/
+- ✅ Fichier `deployment-secrets.txt` avec toutes les valeurs
+- ✅ Fichier `.github-secrets.env` pour référence locale
+
+**Vous n'avez plus qu'à copier-coller les valeurs dans GitHub Secrets !**
+
+<details>
+<summary>Ancienne méthode manuelle (cliquez pour voir)</summary>
 
 ```bash
 cd ~/www/pomodoro
@@ -60,15 +85,37 @@ php bin/console lexik:jwt:generate-keypair
 cat config/jwt/private.pem
 cat config/jwt/public.pem
 ```
+</details>
 
 ## Configuration GitHub
+
+### 0. Générer automatiquement tous les secrets (RECOMMANDÉ)
+
+**🚀 Méthode rapide et sans erreur !**
+
+Avant de configurer les secrets GitHub manuellement, utilisez le script automatisé :
+
+```bash
+# Générer tous les secrets automatiquement
+make setup-deployment
+```
+
+Le script va :
+1. Générer APP_SECRET, JWT_PASSPHRASE et les clés JWT
+2. Créer le fichier `deployment-secrets.txt` avec TOUTES les valeurs formatées
+3. Copier les clés JWT dans `config/jwt/` pour le dev local
+4. Créer un fichier de référence `.github-secrets.env`
+
+**Résultat** : Un fichier `deployment-secrets.txt` avec toutes les valeurs prêtes à copier-coller dans GitHub ! 📋
 
 ### 1. Configurer les Secrets GitHub
 
 Allez dans les paramètres de votre dépôt GitHub :
 `Settings > Secrets and variables > Actions > New repository secret`
 
-Ajoutez les secrets suivants :
+**Si vous avez utilisé le script** : Ouvrez `deployment-secrets.txt` et copiez les valeurs générées.
+
+**Sinon**, ajoutez les secrets suivants manuellement :
 
 #### Connexion FTP
 - `FTP_SERVER` : ftp.votre-domaine.com
