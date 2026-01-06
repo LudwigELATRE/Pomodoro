@@ -41,7 +41,7 @@ jobs:
       - name: Install Composer dependencies
         run: |
           export APP_ENV=prod
-          composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
+          composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist --no-scripts
 
       - name: Install npm dependencies
         run: npm ci
@@ -70,9 +70,6 @@ jobs:
           echo "${{ secrets.JWT_PUBLIC_KEY }}" > config/jwt/public.pem
           chmod 600 config/jwt/private.pem
           chmod 644 config/jwt/public.pem
-
-      - name: Clear Symfony cache
-        run: php bin/console cache:clear --env=prod --no-debug
 
       - name: Prepare deployment package
         run: |
