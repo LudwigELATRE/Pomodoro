@@ -204,9 +204,19 @@ php bin/phpunit --coverage-html coverage/
 
 Le projet inclut un workflow GitHub Actions pour le déploiement automatique sur O2switch.
 
+**🚀 Nouveau : Configuration simplifiée !**
+
+```bash
+# Générer automatiquement tous les secrets (JWT, APP_SECRET, etc.)
+make setup-deployment
+```
+
+Cette commande génère un fichier `deployment-secrets.txt` avec toutes les valeurs à copier dans GitHub Secrets.
+
 **Consultez le guide complet : [DEPLOYMENT.md](DEPLOYMENT.md)**
 
 Le guide contient :
+- **Script automatisé de génération des secrets** (recommandé !)
 - Configuration de l'hébergement O2switch
 - Configuration des secrets GitHub
 - Structure des fichiers sur le serveur

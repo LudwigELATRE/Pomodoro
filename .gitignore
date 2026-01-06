@@ -41,3 +41,8 @@ yarn-error.log
 
 # JWT Keys
 /config/jwt/*.pem
+
+# Deployment secrets (never commit!)
+deployment-secrets.txt
+.github-secrets.env
+scripts/deployment-secrets.txt

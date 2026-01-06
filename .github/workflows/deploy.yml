@@ -1,0 +1,164 @@
+name: Deploy to O2switch
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch: # Permet de déclencher manuellement
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mbstring, xml, ctype, iconv, intl, pdo_mysql
+          coverage: none
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Get Composer Cache Directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: ${{ runner.os }}-composer-
+
+      - name: Install Composer dependencies
+        run: composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Build assets
+        run: npm run build
+
+      - name: Create production .env file
+        run: |
+          echo "APP_ENV=prod" > .env.local
+          echo "APP_SECRET=${{ secrets.APP_SECRET }}" >> .env.local
+          echo "DATABASE_URL=${{ secrets.DATABASE_URL }}" >> .env.local
+          echo "JWT_SECRET_KEY=%kernel.project_dir%/config/jwt/private.pem" >> .env.local
+          echo "JWT_PUBLIC_KEY=%kernel.project_dir%/config/jwt/public.pem" >> .env.local
+          echo "JWT_PASSPHRASE=${{ secrets.JWT_PASSPHRASE }}" >> .env.local
+          echo "CORS_ALLOW_ORIGIN=${{ secrets.CORS_ALLOW_ORIGIN }}" >> .env.local
+          echo "FRONTEND_URL=${{ secrets.FRONTEND_URL }}" >> .env.local
+          echo "GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}" >> .env.local
+          echo "GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}" >> .env.local
+          echo "MAILER_DSN=${{ secrets.MAILER_DSN }}" >> .env.local
+
+      - name: Create JWT keys from secrets
+        run: |
+          mkdir -p config/jwt
+          echo "${{ secrets.JWT_PRIVATE_KEY }}" > config/jwt/private.pem
+          echo "${{ secrets.JWT_PUBLIC_KEY }}" > config/jwt/public.pem
+          chmod 600 config/jwt/private.pem
+          chmod 644 config/jwt/public.pem
+
+      - name: Clear Symfony cache
+        run: php bin/console cache:clear --env=prod --no-debug
+
+      - name: Prepare deployment package
+        run: |
+          # Créer un fichier .deployignore personnalisé
+          cat > .deployignore << 'EOF'
+          .git/
+          .github/
+          node_modules/
+          tests/
+          var/cache/*
+          var/log/*
+          .env.test
+          .env.local.php
+          phpunit.dist.xml
+          webpack.config.js
+          package.json
+          package-lock.json
+          composer.json
+          composer.lock
+          tailwind.config.js
+          postcss.config.js
+          assets/
+          .gitignore
+          .deployignore
+          README.md
+          ARCHITECTURE.md
+          DEBUG-AUTH.md
+          DEBUG-NETWORK.md
+          ETAPES-TEST.md
+          Makefile
+          EOF
+
+      - name: Deploy via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          server-dir: ${{ secrets.FTP_SERVER_DIR }}
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/node_modules/**
+            **/tests/**
+            **/.env.test
+            **/webpack.config.js
+            **/package.json
+            **/package-lock.json
+            **/composer.json
+            **/composer.lock
+            **/tailwind.config.js
+            **/postcss.config.js
+            **/assets/**
+            **/*.md
+            **/Makefile
+
+      - name: Execute post-deployment commands via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          password: ${{ secrets.SSH_PASSWORD }}
+          port: ${{ secrets.SSH_PORT }}
+          script: |
+            cd ${{ secrets.REMOTE_PATH }}
+
+            # Créer les dossiers nécessaires s'ils n'existent pas
+            mkdir -p var/cache var/log
+
+            # Permissions
+            chmod -R 775 var/
+
+            # Exécuter les migrations
+            php bin/console doctrine:migrations:migrate --no-interaction --env=prod
+
+            # Vider le cache
+            php bin/console cache:clear --env=prod --no-debug
+
+            # Warmup du cache
+            php bin/console cache:warmup --env=prod
+
+            echo "Deployment completed successfully!"
+
+      - name: Deployment notification
+        if: always()
+        run: |
+          if [ ${{ job.status }} == 'success' ]; then
+            echo "✅ Deployment to O2switch succeeded!"
+          else
+            echo "❌ Deployment to O2switch failed!"
+          fi

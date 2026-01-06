@@ -77,6 +77,9 @@ quality: cs-fix test ## Lance les outils de qualité de code
 jwt-generate: ## Génère les clés JWT
 	php bin/console lexik:jwt:generate-keypair
 
+setup-deployment: ## Configure les secrets pour le déploiement (génère JWT, APP_SECRET, etc.)
+	@bash scripts/setup-deployment.sh
+
 deploy-check: ## Vérifie que tout est prêt pour le déploiement
 	@echo "🔍 Vérification de la configuration de déploiement..."
 	@test -f .env.local && echo "✅ .env.local existe" || echo "❌ .env.local manquant"
