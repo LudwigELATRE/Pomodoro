@@ -123,8 +123,9 @@ jobs:
             # Arrêter l'ancien serveur PHP si existant
             pkill -f "php -S 0.0.0.0:8000" || true
 
-            # Démarrer le serveur PHP en arrière-plan
+            # Démarrer le serveur PHP en arrière-plan avec disown
             nohup php -S 0.0.0.0:8000 -t public > var/log/php-server.log 2>&1 &
+            disown
 
             # Vérifier que le serveur a démarré
             sleep 2
@@ -134,11 +135,8 @@ jobs:
               echo "Warning: PHP server may not have started correctly"
             fi
 
+            # Exit proprement
+            exit 0
+
       - name: Deployment notification
-        if: always()
-        run: |
-          if [ ${{ job.status }} == 'success' ]; then
-            echo "✅ Deployment to VPS succeeded!"
-          else
-            echo "❌ Deployment to VPS failed!"
-          fi
+        run: echo "✅ Deployment to VPS succeeded!"
