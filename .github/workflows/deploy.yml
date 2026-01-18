@@ -80,7 +80,7 @@ jobs:
           username: ubuntu
           key: ${{ secrets.VPS_SSH_KEY }}
           port: 22
-          source: "bin,config,public,src,templates,translations,vendor,.env.local"
+          source: "bin,config,public,src,templates,translations,vendor,.env,.env.local"
           target: ${{ env.DEPLOY_PATH }}
           overwrite: true
 
