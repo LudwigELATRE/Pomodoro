@@ -70,7 +70,7 @@ jobs:
           mkdir -p config/jwt
           echo "${{ secrets.JWT_PRIVATE_KEY }}" > config/jwt/private.pem
           echo "${{ secrets.JWT_PUBLIC_KEY }}" > config/jwt/public.pem
-          chmod 600 config/jwt/private.pem
+          chmod 644 config/jwt/private.pem
           chmod 644 config/jwt/public.pem
 
       - name: Deploy via SSH
@@ -99,6 +99,8 @@ jobs:
 
             # Permissions
             chmod -R 775 var/
+            chmod 600 config/jwt/private.pem
+            chmod 644 config/jwt/public.pem
 
             # Exécuter les migrations
             php bin/console doctrine:migrations:migrate --no-interaction --env=prod
