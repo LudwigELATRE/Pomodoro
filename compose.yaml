@@ -1,20 +1,23 @@
-
 services:
-###> doctrine/doctrine-bundle ###
   database:
     image: mariadb:11.2
+    container_name: pomodoro_db
+    restart: unless-stopped
     environment:
       MYSQL_DATABASE: ${MYSQL_DATABASE:-pomodoro}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-elydris}
       MYSQL_USER: ${MYSQL_USER:-pomodoro}
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-pomodoro_password}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_password}
     ports:
       - "3306:3306"
     volumes:
-      - database_data:/var/lib/mysql:rw
-###< doctrine/doctrine-bundle ###
+      - database_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
 volumes:
-###> doctrine/doctrine-bundle ###
   database_data:
-###< doctrine/doctrine-bundle ###
