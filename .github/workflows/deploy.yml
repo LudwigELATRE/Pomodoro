@@ -121,13 +121,18 @@ jobs:
             php bin/console cache:warmup --env=prod
 
             # Arrêter l'ancien serveur PHP si existant
-            pm2 delete pomodoro 2>/dev/null || true
+            pkill -f "php -S 0.0.0.0:8000" || true
 
-            # Démarrer le serveur PHP avec pm2
-            pm2 start "php -S 0.0.0.0:8000 -t public" --name pomodoro --cwd ${{ env.DEPLOY_PATH }}
-            pm2 save
+            # Démarrer le serveur PHP en arrière-plan
+            nohup php -S 0.0.0.0:8000 -t public > var/log/php-server.log 2>&1 &
 
-            echo "Deployment completed successfully! Server running on port 8000"
+            # Vérifier que le serveur a démarré
+            sleep 2
+            if pgrep -f "php -S 0.0.0.0:8000" > /dev/null; then
+              echo "Deployment completed successfully! Server running on port 8000"
+            else
+              echo "Warning: PHP server may not have started correctly"
+            fi
 
       - name: Deployment notification
         if: always()
