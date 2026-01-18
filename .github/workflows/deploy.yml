@@ -102,6 +102,17 @@ jobs:
             chmod 600 config/jwt/private.pem
             chmod 644 config/jwt/public.pem
 
+            # Créer le fichier .env pour Docker avec le mot de passe DB
+            echo "MYSQL_PASSWORD=${{ secrets.DB_PASSWORD }}" > .env.docker
+            echo "MYSQL_ROOT_PASSWORD=${{ secrets.DB_PASSWORD }}" >> .env.docker
+
+            # Démarrer/Redémarrer la base de données
+            docker compose --env-file .env.docker up -d
+
+            # Attendre que MariaDB soit prêt
+            echo "Waiting for database..."
+            sleep 20
+
             # Exécuter les migrations
             php bin/console doctrine:migrations:migrate --no-interaction --env=prod
 
@@ -109,7 +120,14 @@ jobs:
             php bin/console cache:clear --env=prod --no-debug
             php bin/console cache:warmup --env=prod
 
-            echo "Deployment completed successfully!"
+            # Arrêter l'ancien serveur PHP si existant
+            pm2 delete pomodoro 2>/dev/null || true
+
+            # Démarrer le serveur PHP avec pm2
+            pm2 start "php -S 0.0.0.0:8000 -t public" --name pomodoro --cwd ${{ env.DEPLOY_PATH }}
+            pm2 save
+
+            echo "Deployment completed successfully! Server running on port 8000"
 
       - name: Deployment notification
         if: always()

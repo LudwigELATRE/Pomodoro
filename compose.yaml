@@ -4,10 +4,10 @@ services:
     container_name: pomodoro_db
     restart: unless-stopped
     environment:
-      MYSQL_DATABASE: ${MYSQL_DATABASE:-pomodoro}
-      MYSQL_USER: ${MYSQL_USER:-pomodoro}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-pomodoro_password}
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_password}
+      MYSQL_DATABASE: pomodoro
+      MYSQL_USER: pomodoro
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
     ports:
       - "3306:3306"
     volumes:
