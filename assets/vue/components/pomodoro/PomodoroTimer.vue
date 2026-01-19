@@ -108,13 +108,15 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onUnmounted } from 'vue'
+import { computed, watch, onUnmounted } from 'vue'
 import { usePomodoroStore } from '../../stores/pomodoro'
 import { useI18n } from 'vue-i18n'
 
 const pomodoroStore = usePomodoroStore()
 const { t } = useI18n()
 let timerInterval = null
+
+// On mount, nothing special to do - session state is managed by the store
 
 // Computed properties
 const displayTime = computed(() => {
@@ -200,7 +202,7 @@ function startTimer() {
 
   timerInterval = setInterval(() => {
     if (pomodoroStore.timeLeft > 0) {
-      pomodoroStore.timeLeft--
+      pomodoroStore.updateTimeLeft(pomodoroStore.timeLeft - 1)
     } else {
       handleTimerComplete()
     }
@@ -217,14 +219,23 @@ function stopTimer() {
 async function handleTimerComplete() {
   stopTimer()
 
+  // Save current session type before any modifications
+  const completedSessionType = pomodoroStore.currentSession?.type
+
   // Play sound notification
   playNotificationSound()
 
   // Show browser notification
   showBrowserNotification()
 
+  // Check if cycle is complete (after long break)
+  if (completedSessionType === 'long_break') {
+    pomodoroStore.stopPomodoro(true)
+    return
+  }
+
   // Save session if it's a work session
-  if (pomodoroStore.currentSession.type === 'work') {
+  if (completedSessionType === 'work') {
     try {
       const session = await pomodoroStore.createSession({
         type: 'work',
@@ -234,20 +245,33 @@ async function handleTimerComplete() {
         completed: true
       })
 
-      // Increment pomodoro count
-      pomodoroStore.pomodoroCount++
-
-      // Mark as completed
+      // Mark as completed on server
       if (session?.id) {
         await pomodoroStore.completeSession(session.id)
       }
     } catch (err) {
       console.error('Failed to save session:', err)
     }
+
+    // Increment pomodoro count after saving
+    pomodoroStore.pomodoroCount++
+
+    // Check if we should start long break (cycle will end after)
+    const shouldStartLongBreak = pomodoroStore.pomodoroCount % pomodoroStore.settings.pomodorosUntilLongBreak === 0
+
+    if (shouldStartLongBreak) {
+      pomodoroStore.startLongBreak()
+      startTimer()
+      return
+    }
+
+    pomodoroStore.startShortBreak()
+    startTimer()
+    return
   }
 
-  // Auto-start next session
-  pomodoroStore.startPomodoro()
+  // After a break, start next work session
+  pomodoroStore.startWorkSession()
   startTimer()
 }
 
