@@ -2,6 +2,29 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { pomodoroService } from '../services/pomodoro'
 
+const STORAGE_KEY = 'pomodoro_session'
+
+function saveSessionToStorage(data) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+}
+
+function loadSessionFromStorage() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY)
+    if (saved) {
+      return JSON.parse(saved)
+    }
+  } catch (e) {
+    console.warn('Failed to load pomodoro session from localStorage:', e)
+    localStorage.removeItem(STORAGE_KEY)
+  }
+  return null
+}
+
+function clearSessionStorage() {
+  localStorage.removeItem(STORAGE_KEY)
+}
+
 export const usePomodoroStore = defineStore('pomodoro', () => {
   const sessions = ref([])
   const todaySessions = ref([])
@@ -13,10 +36,13 @@ export const usePomodoroStore = defineStore('pomodoro', () => {
     pomodorosUntilLongBreak: 4,
   })
 
-  const currentSession = ref(null)
-  const isRunning = ref(false)
-  const timeLeft = ref(0)
-  const pomodoroCount = ref(0)
+  // Load saved session from localStorage
+  const savedSession = loadSessionFromStorage()
+
+  const currentSession = ref(savedSession?.currentSession || null)
+  const isRunning = ref(false) // Always start paused after reload
+  const timeLeft = ref(savedSession?.timeLeft || 0)
+  const pomodoroCount = ref(savedSession?.pomodoroCount || 0)
 
   const sessionType = computed(() => {
     if (!currentSession.value) return 'work'
@@ -151,6 +177,23 @@ export const usePomodoroStore = defineStore('pomodoro', () => {
       startTime: new Date().toISOString(),
     }
     isRunning.value = true
+
+    saveSessionToStorage({
+      currentSession: currentSession.value,
+      timeLeft: timeLeft.value,
+      pomodoroCount: pomodoroCount.value,
+    })
+  }
+
+  function updateTimeLeft(newTime) {
+    timeLeft.value = newTime
+    if (currentSession.value) {
+      saveSessionToStorage({
+        currentSession: currentSession.value,
+        timeLeft: newTime,
+        pomodoroCount: pomodoroCount.value,
+      })
+    }
   }
 
   function pausePomodoro() {
@@ -161,10 +204,14 @@ export const usePomodoroStore = defineStore('pomodoro', () => {
     isRunning.value = true
   }
 
-  function stopPomodoro() {
+  function stopPomodoro(resetCount = false) {
     isRunning.value = false
     currentSession.value = null
     timeLeft.value = 0
+    if (resetCount) {
+      pomodoroCount.value = 0
+    }
+    clearSessionStorage()
   }
 
   function skipPomodoro() {
@@ -174,11 +221,25 @@ export const usePomodoroStore = defineStore('pomodoro', () => {
     stopPomodoro()
   }
 
+  function completeCurrentSession() {
+    if (currentSession.value?.type === 'work') {
+      pomodoroCount.value++
+    }
+    saveSessionToStorage({
+      currentSession: null,
+      timeLeft: 0,
+      pomodoroCount: pomodoroCount.value,
+    })
+  }
+
   function getNextSessionType() {
     if (!currentSession.value) return 'work'
 
     if (currentSession.value.type === 'work') {
-      if (pomodoroCount.value > 0 && pomodoroCount.value % settings.value.pomodorosUntilLongBreak === 0) {
+      // After this work session completes, pomodoroCount will be incremented
+      // So we check if (pomodoroCount + 1) is a multiple of pomodorosUntilLongBreak
+      const nextCount = pomodoroCount.value + 1
+      if (nextCount > 0 && nextCount % settings.value.pomodorosUntilLongBreak === 0) {
         return 'long_break'
       }
       return 'short_break'
@@ -224,5 +285,7 @@ export const usePomodoroStore = defineStore('pomodoro', () => {
     skipPomodoro,
     getNextSessionType,
     getDurationForType,
+    updateTimeLeft,
+    completeCurrentSession,
   }
 })

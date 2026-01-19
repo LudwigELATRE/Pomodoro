@@ -108,13 +108,23 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onUnmounted } from 'vue'
+import { computed, watch, onMounted, onUnmounted } from 'vue'
 import { usePomodoroStore } from '../../stores/pomodoro'
 import { useI18n } from 'vue-i18n'
 
 const pomodoroStore = usePomodoroStore()
 const { t } = useI18n()
 let timerInterval = null
+
+// On mount, check if there's a saved session to resume
+onMounted(() => {
+  if (pomodoroStore.currentSession && pomodoroStore.timeLeft > 0) {
+    console.log('[PomodoroTimer] Session restaurée depuis localStorage:', {
+      type: pomodoroStore.currentSession.type,
+      timeLeft: pomodoroStore.timeLeft,
+    })
+  }
+})
 
 // Computed properties
 const displayTime = computed(() => {
@@ -200,7 +210,7 @@ function startTimer() {
 
   timerInterval = setInterval(() => {
     if (pomodoroStore.timeLeft > 0) {
-      pomodoroStore.timeLeft--
+      pomodoroStore.updateTimeLeft(pomodoroStore.timeLeft - 1)
     } else {
       handleTimerComplete()
     }
@@ -217,6 +227,9 @@ function stopTimer() {
 async function handleTimerComplete() {
   stopTimer()
 
+  // Save current session type before any modifications
+  const completedSessionType = pomodoroStore.currentSession?.type
+
   // Play sound notification
   playNotificationSound()
 
@@ -224,7 +237,7 @@ async function handleTimerComplete() {
   showBrowserNotification()
 
   // Save session if it's a work session
-  if (pomodoroStore.currentSession.type === 'work') {
+  if (completedSessionType === 'work') {
     try {
       const session = await pomodoroStore.createSession({
         type: 'work',
@@ -234,16 +247,23 @@ async function handleTimerComplete() {
         completed: true
       })
 
-      // Increment pomodoro count
-      pomodoroStore.pomodoroCount++
+      // Mark as completed in store and localStorage
+      pomodoroStore.completeCurrentSession()
 
-      // Mark as completed
+      // Mark as completed on server
       if (session?.id) {
         await pomodoroStore.completeSession(session.id)
       }
     } catch (err) {
       console.error('Failed to save session:', err)
     }
+  }
+
+  // Check if cycle is complete (after long break)
+  if (completedSessionType === 'long_break') {
+    // Cycle complete - stop and reset counter
+    pomodoroStore.stopPomodoro(true)
+    return
   }
 
   // Auto-start next session
