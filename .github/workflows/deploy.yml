@@ -121,16 +121,16 @@ jobs:
             php bin/console cache:warmup --env=prod
 
             # Arrêter l'ancien serveur PHP si existant
-            pkill -f "php -S 0.0.0.0:8000" || true
+            pkill -f "php -S 0.0.0.0:8001" || true
 
             # Démarrer le serveur PHP en arrière-plan avec disown
-            nohup php -S 0.0.0.0:8000 -t public > var/log/php-server.log 2>&1 &
+            nohup php -S 0.0.0.0:8001 -t public > var/log/php-server.log 2>&1 &
             disown
 
             # Vérifier que le serveur a démarré
             sleep 2
-            if pgrep -f "php -S 0.0.0.0:8000" > /dev/null; then
-              echo "Deployment completed successfully! Server running on port 8000"
+            if pgrep -f "php -S 0.0.0.0:8001" > /dev/null; then
+              echo "Deployment completed successfully! Server running on port 8001"
             else
               echo "Warning: PHP server may not have started correctly"
             fi
