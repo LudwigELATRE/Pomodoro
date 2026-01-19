@@ -1,5 +1,6 @@
 {
   "nav": {
+    "user": "User",
     "timer": "Timer",
     "statistics": "Statistics",
     "settings": "Settings",

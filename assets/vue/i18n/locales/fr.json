@@ -1,5 +1,6 @@
 {
   "nav": {
+    "user": "Utilisateur",
     "timer": "Minuteur",
     "statistics": "Statistiques",
     "settings": "Paramètres",
