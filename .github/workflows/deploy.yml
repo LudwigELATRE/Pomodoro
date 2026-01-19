@@ -120,23 +120,39 @@ jobs:
             php bin/console cache:clear --env=prod --no-debug
             php bin/console cache:warmup --env=prod
 
-            # Arrêter l'ancien serveur PHP si existant
-            pkill -f "php -S 0.0.0.0:8001" || true
+            # Créer le service systemd pour PHP si nécessaire
+            sudo tee /etc/systemd/system/pomodoro-php.service > /dev/null << 'SYSTEMD'
+            [Unit]
+            Description=Pomodoro PHP Server
+            After=network.target docker.service
 
-            # Démarrer le serveur PHP en arrière-plan avec disown
-            nohup php -S 0.0.0.0:8001 -t public > var/log/php-server.log 2>&1 &
-            disown
+            [Service]
+            Type=simple
+            User=ubuntu
+            WorkingDirectory=/home/ubuntu/pomodoro
+            ExecStart=/usr/bin/php -S 0.0.0.0:8001 -t public
+            Restart=always
+            RestartSec=5
+            StandardOutput=append:/home/ubuntu/pomodoro/var/log/php-server.log
+            StandardError=append:/home/ubuntu/pomodoro/var/log/php-server.log
+
+            [Install]
+            WantedBy=multi-user.target
+            SYSTEMD
+
+            # Recharger systemd et redémarrer le service
+            sudo systemctl daemon-reload
+            sudo systemctl enable pomodoro-php
+            sudo systemctl restart pomodoro-php
 
             # Vérifier que le serveur a démarré
             sleep 2
-            if pgrep -f "php -S 0.0.0.0:8001" > /dev/null; then
+            if systemctl is-active --quiet pomodoro-php; then
               echo "Deployment completed successfully! Server running on port 8001"
             else
               echo "Warning: PHP server may not have started correctly"
+              sudo systemctl status pomodoro-php
             fi
-
-            # Exit proprement
-            exit 0
 
       - name: Deployment notification
         run: echo "✅ Deployment to VPS succeeded!"
