@@ -52,7 +52,6 @@ export const usePomodoroStore = defineStore('pomodoro', () => {
   async function loadSettings() {
     try {
       const data = await pomodoroService.getSettings()
-      console.log('Settings loaded from API:', data)
       if (data && typeof data === 'object') {
         settings.value = {
           workDuration: typeof data.workDuration === 'number' ? data.workDuration : 1500,
@@ -60,7 +59,6 @@ export const usePomodoroStore = defineStore('pomodoro', () => {
           longBreakDuration: typeof data.longBreakDuration === 'number' ? data.longBreakDuration : 900,
           pomodorosUntilLongBreak: typeof data.pomodorosUntilLongBreak === 'number' ? data.pomodorosUntilLongBreak : 4,
         }
-        console.log('Settings applied:', settings.value)
       }
     } catch (err) {
       console.error('Failed to load settings:', err)
@@ -69,22 +67,16 @@ export const usePomodoroStore = defineStore('pomodoro', () => {
 
   async function updateSettings(newSettings) {
     try {
-      console.log('[PomodoroStore] Envoi à l\'API:', newSettings)
-      const data = await pomodoroService.updateSettings(newSettings)
-      console.log('[PomodoroStore] Réponse de l\'API:', data)
+      await pomodoroService.updateSettings(newSettings)
 
-      // Mettre à jour directement avec les nouvelles valeurs
-      // (on sait que l'API les sauvegarde correctement)
       settings.value = {
         workDuration: newSettings.workDuration ?? settings.value.workDuration,
         shortBreakDuration: newSettings.shortBreakDuration ?? settings.value.shortBreakDuration,
         longBreakDuration: newSettings.longBreakDuration ?? settings.value.longBreakDuration,
         pomodorosUntilLongBreak: newSettings.pomodorosUntilLongBreak ?? settings.value.pomodorosUntilLongBreak,
       }
-
-      console.log('[PomodoroStore] Settings mis à jour:', settings.value)
     } catch (err) {
-      console.error('[PomodoroStore] Erreur lors de la mise à jour:', err)
+      console.error('Failed to update settings:', err)
       throw err
     }
   }
@@ -102,21 +94,13 @@ export const usePomodoroStore = defineStore('pomodoro', () => {
   async function loadTodaySessions() {
     try {
       const data = await pomodoroService.getTodaySessions()
-      console.log('[PomodoroStore] Sessions du jour chargées:', data)
 
-      // Filtrer les sessions invalides
       if (Array.isArray(data)) {
         todaySessions.value = data.filter(session => {
-          // Vérifier que la session a les champs requis
-          const isValid = session &&
-                         session.type &&
-                         session.duration != null &&
-                         session.startTime
-
-          if (!isValid) {
-            console.warn('[PomodoroStore] Session invalide ignorée:', session)
-          }
-          return isValid
+          return session &&
+                 session.type &&
+                 session.duration != null &&
+                 session.startTime
         })
       } else {
         todaySessions.value = []
@@ -161,14 +145,39 @@ export const usePomodoroStore = defineStore('pomodoro', () => {
     }
   }
 
+  function startSession(type) {
+    const duration = getDurationForType(type)
+
+    timeLeft.value = duration
+    currentSession.value = {
+      type,
+      duration,
+      startTime: new Date().toISOString(),
+    }
+    isRunning.value = true
+
+    saveSessionToStorage({
+      currentSession: currentSession.value,
+      timeLeft: timeLeft.value,
+      pomodoroCount: pomodoroCount.value,
+    })
+  }
+
+  function startWorkSession() {
+    startSession('work')
+  }
+
+  function startShortBreak() {
+    startSession('short_break')
+  }
+
+  function startLongBreak() {
+    startSession('long_break')
+  }
+
   function startPomodoro() {
     const type = getNextSessionType()
     const duration = getDurationForType(type)
-
-    console.log('[PomodoroStore] Démarrage d\'un nouveau pomodoro')
-    console.log('[PomodoroStore] Type de session:', type)
-    console.log('[PomodoroStore] Paramètres actuels:', settings.value)
-    console.log('[PomodoroStore] Durée calculée:', duration, 'secondes')
 
     timeLeft.value = duration
     currentSession.value = {
@@ -236,10 +245,9 @@ export const usePomodoroStore = defineStore('pomodoro', () => {
     if (!currentSession.value) return 'work'
 
     if (currentSession.value.type === 'work') {
-      // After this work session completes, pomodoroCount will be incremented
-      // So we check if (pomodoroCount + 1) is a multiple of pomodorosUntilLongBreak
-      const nextCount = pomodoroCount.value + 1
-      if (nextCount > 0 && nextCount % settings.value.pomodorosUntilLongBreak === 0) {
+      // pomodoroCount has already been incremented by completeCurrentSession()
+      // So we check if current count is a multiple of pomodorosUntilLongBreak
+      if (pomodoroCount.value > 0 && pomodoroCount.value % settings.value.pomodorosUntilLongBreak === 0) {
         return 'long_break'
       }
       return 'short_break'
@@ -279,6 +287,9 @@ export const usePomodoroStore = defineStore('pomodoro', () => {
     createSession,
     completeSession,
     startPomodoro,
+    startWorkSession,
+    startShortBreak,
+    startLongBreak,
     pausePomodoro,
     resumePomodoro,
     stopPomodoro,
