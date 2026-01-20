@@ -64,6 +64,7 @@ jobs:
           echo "FRONTEND_URL=https://pomodoro.elydris.fr" >> .env.local
           echo "GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}" >> .env.local
           echo "GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}" >> .env.local
+          echo "GOOGLE_REDIRECT_URI=${{ secrets.GOOGLE_REDIRECT_URI }}" >> .env.local
 
       - name: Create JWT keys from secrets
         run: |

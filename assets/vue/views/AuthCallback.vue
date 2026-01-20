@@ -29,9 +29,8 @@ async function attemptLogin(token, retries = 5, delay = 1500) {
       // Save token
       localStorage.setItem('token', token)
 
-      // Try to fetch user using api service
-      const apiUrl = "" || 'http://localhost:8000'
-      const response = await fetch(`${apiUrl}/api/me`, {
+      // Try to fetch user using api service (relative URL works for same domain)
+      const response = await fetch('/api/me', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
