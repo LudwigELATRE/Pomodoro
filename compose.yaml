@@ -1,15 +1,18 @@
+name: pomodoro
+
 services:
   database:
-    image: mariadb:11.2
+    image: mariadb:11.4
     container_name: pomodoro_db
     restart: unless-stopped
+    env_file:
+      - .env.docker
     environment:
       MYSQL_DATABASE: pomodoro
       MYSQL_USER: pomodoro
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-    ports:
-      - "3306:3306"
+      # Passage 11.2 -> 11.4 : lance mariadb-upgrade automatiquement au démarrage
+      MARIADB_AUTO_UPGRADE: "1"
+    # Plus de port publié : la base n'est accessible que depuis le réseau interne
     volumes:
       - database_data:/var/lib/mysql
     healthcheck:
@@ -18,6 +21,25 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+
+  php:
+    image: pomodoro-php:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+      pull: true
+    container_name: pomodoro_php
+    restart: unless-stopped
+    env_file:
+      - .env.local
+    depends_on:
+      database:
+        condition: service_healthy
+    ports:
+      # Uniquement en local : exposé publiquement via le tunnel cloudflared (pomodoro.elydris.fr)
+      - "127.0.0.1:8001:80"
+    volumes:
+      - ./config/jwt:/run/jwt:ro
 
 volumes:
   database_data:

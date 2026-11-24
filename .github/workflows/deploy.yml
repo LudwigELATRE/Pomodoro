@@ -4,156 +4,49 @@ on:
   push:
     branches:
       - main
+  # Reconstruction nocturne (03:00 Antilles) pour récupérer les correctifs
+  # de sécurité des images de base (PHP 8.4, Debian, MariaDB 11.4, node 22)
+  schedule:
+    - cron: '0 7 * * *'
   workflow_dispatch:
 
-env:
-  DEPLOY_PATH: /home/ubuntu/pomodoro
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
 
 jobs:
-  build-and-deploy:
+  deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.3'
-          extensions: mbstring, xml, ctype, iconv, intl, pdo_mysql
-          coverage: none
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-          cache: 'npm'
-
-      - name: Get Composer Cache Directory
-        id: composer-cache
-        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
-
-      - name: Cache Composer dependencies
-        uses: actions/cache@v4
-        with:
-          path: ${{ steps.composer-cache.outputs.dir }}
-          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
-          restore-keys: ${{ runner.os }}-composer-
-
-      - name: Install Composer dependencies
-        run: |
-          export APP_ENV=prod
-          composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist --no-scripts
-
-      - name: Install npm dependencies
-        run: npm ci
-
-      - name: Build assets
-        run: npm run build
-
-      - name: Create production .env file
-        run: |
-          echo "APP_ENV=prod" > .env.local
-          echo "APP_SECRET=${{ secrets.APP_SECRET }}" >> .env.local
-          echo "DATABASE_URL=${{ secrets.DATABASE_URL }}" >> .env.local
-          echo "JWT_SECRET_KEY=%kernel.project_dir%/config/jwt/private.pem" >> .env.local
-          echo "JWT_PUBLIC_KEY=%kernel.project_dir%/config/jwt/public.pem" >> .env.local
-          echo "JWT_PASSPHRASE=${{ secrets.JWT_PASSPHRASE }}" >> .env.local
-          echo "CORS_ALLOW_ORIGIN='^https?://(pomodoro\.elydris\.fr|localhost)(:[0-9]+)?$'" >> .env.local
-          echo "FRONTEND_URL=https://pomodoro.elydris.fr" >> .env.local
-          echo "GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}" >> .env.local
-          echo "GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}" >> .env.local
-          echo "GOOGLE_REDIRECT_URI=${{ secrets.GOOGLE_REDIRECT_URI }}" >> .env.local
-
-      - name: Create JWT keys from secrets
-        run: |
-          mkdir -p config/jwt
-          echo "${{ secrets.JWT_PRIVATE_KEY }}" > config/jwt/private.pem
-          echo "${{ secrets.JWT_PUBLIC_KEY }}" > config/jwt/public.pem
-          chmod 644 config/jwt/private.pem
-          chmod 644 config/jwt/public.pem
-
-      - name: Deploy via SSH
-        uses: appleboy/scp-action@v0.1.7
+      - name: Build, migrate and restart on the VPS
+        uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ubuntu
           key: ${{ secrets.VPS_SSH_KEY }}
           port: 22
-          source: "bin,config,migrations,public,src,templates,translations,vendor,composer.json,symfony.lock,compose.yaml,.env,.env.local"
-          target: ${{ env.DEPLOY_PATH }}
-          overwrite: true
-
-      - name: Execute post-deployment commands
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ubuntu
-          key: ${{ secrets.VPS_SSH_KEY }}
-          port: 22
+          command_timeout: 30m
           script: |
-            cd ${{ env.DEPLOY_PATH }}
+            set -e
+            cd /home/ubuntu/pomodoro
 
-            # Créer les dossiers nécessaires
-            mkdir -p var/cache var/log
+            # Le serveur est un clone du dépôt ; les secrets (.env.local,
+            # .env.docker, config/jwt/*.pem) sont hors de git et ne sont pas touchés.
+            git fetch --quiet origin main
+            git reset --hard origin/main
 
-            # Permissions
-            chmod -R 775 var/
-            chmod 600 config/jwt/private.pem
-            chmod 644 config/jwt/public.pem
+            docker compose pull database
+            docker compose build --pull php
+            # L'entrypoint lance les migrations Doctrine puis le cache:warmup
+            docker compose up -d --remove-orphans
 
-            # Créer le fichier .env pour Docker avec le mot de passe DB
-            echo "MYSQL_PASSWORD=${{ secrets.DB_PASSWORD }}" > .env.docker
-            echo "MYSQL_ROOT_PASSWORD=${{ secrets.DB_PASSWORD }}" >> .env.docker
+            for i in $(seq 1 30); do
+              status=$(docker inspect -f '{{.State.Health.Status}}' pomodoro_php 2>/dev/null || true)
+              [ "$status" = "healthy" ] && break
+              sleep 5
+            done
+            docker compose ps
+            [ "$status" = "healthy" ] || { docker logs --tail 50 pomodoro_php; exit 1; }
 
-            # Démarrer/Redémarrer la base de données
-            docker compose --env-file .env.docker up -d
-
-            # Attendre que MariaDB soit prêt
-            echo "Waiting for database..."
-            sleep 20
-
-            # Exécuter les migrations
-            php bin/console doctrine:migrations:migrate --no-interaction --env=prod
-
-            # Vider et réchauffer le cache
-            php bin/console cache:clear --env=prod --no-debug
-            php bin/console cache:warmup --env=prod
-
-            # Créer le service systemd pour PHP si nécessaire
-            sudo tee /etc/systemd/system/pomodoro-php.service > /dev/null << 'SYSTEMD'
-            [Unit]
-            Description=Pomodoro PHP Server
-            After=network.target docker.service
-
-            [Service]
-            Type=simple
-            User=ubuntu
-            WorkingDirectory=/home/ubuntu/pomodoro
-            ExecStart=/usr/bin/php -S 0.0.0.0:8001 -t public
-            Restart=always
-            RestartSec=5
-            StandardOutput=append:/home/ubuntu/pomodoro/var/log/php-server.log
-            StandardError=append:/home/ubuntu/pomodoro/var/log/php-server.log
-
-            [Install]
-            WantedBy=multi-user.target
-            SYSTEMD
-
-            # Recharger systemd et redémarrer le service
-            sudo systemctl daemon-reload
-            sudo systemctl enable pomodoro-php
-            sudo systemctl restart pomodoro-php
-
-            # Vérifier que le serveur a démarré
-            sleep 2
-            if systemctl is-active --quiet pomodoro-php; then
-              echo "Deployment completed successfully! Server running on port 8001"
-            else
-              echo "Warning: PHP server may not have started correctly"
-              sudo systemctl status pomodoro-php
-            fi
-
-      - name: Deployment notification
-        run: echo "✅ Deployment to VPS succeeded!"
+            docker image prune -f
