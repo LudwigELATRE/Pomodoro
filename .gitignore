@@ -43,3 +43,6 @@ yarn-error.log
 # Claude
 .claude/
 .claude.json
+
+# Mots de passe MariaDB du serveur
+/.env.docker
